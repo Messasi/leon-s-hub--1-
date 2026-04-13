@@ -1,0 +1,67 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+    function isDocOwner() {
+      return isAuthenticated() && request.auth.uid == resource.data.userId;
+    }
+    function isValidTask(data) {
+      return data.name is string && data.name.size() > 0 && data.name.size() < 200 &&
+             data.category in ['Academic', 'Health', 'Chores', 'Leisure', 'To-Do'] &&
+             data.userId == request.auth.uid;
+    }
+    function isValidFinance(data) {
+      return data.weeklyBudget is number && data.weeklyBudget >= 0 &&
+             data.currentSpending is number && data.currentSpending >= 0 &&
+             data.userId == request.auth.uid;
+    }
+    function isValidHealth(data) {
+      return data.date is string && data.userId == request.auth.uid;
+    }
+    function isValidGoal(data) {
+      return data.title is string && data.title.size() > 0 && data.title.size() < 200 &&
+             data.userId == request.auth.uid;
+    }
+    function isValidSettings(data) {
+      return data.userId == request.auth.uid;
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+    match /tasks/{taskId} {
+      allow read: if isDocOwner();
+      allow create: if isAuthenticated() && isValidTask(request.resource.data);
+      allow update: if isDocOwner() && isValidTask(request.resource.data);
+      allow delete: if isDocOwner();
+    }
+    match /finances/{userId} {
+      allow read: if isOwner(userId);
+      allow write: if isOwner(userId) && isValidFinance(request.resource.data);
+    }
+    match /health/{healthId} {
+      allow read: if isDocOwner();
+      allow create: if isAuthenticated() && isValidHealth(request.resource.data);
+      allow update: if isDocOwner() && isValidHealth(request.resource.data);
+      allow delete: if isDocOwner();
+    }
+    match /goals/{goalId} {
+      allow read: if isDocOwner();
+      allow create: if isAuthenticated() && isValidGoal(request.resource.data);
+      allow update: if isDocOwner() && isValidGoal(request.resource.data);
+      allow delete: if isDocOwner();
+    }
+    match /settings/{userId} {
+      allow read: if isOwner(userId);
+      allow write: if isOwner(userId) && isValidSettings(request.resource.data);
+    }
+  }
+}

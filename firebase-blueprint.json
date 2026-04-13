@@ -1,0 +1,79 @@
+{
+  "entities": {
+    "Task": {
+      "title": "Task",
+      "description": "A daily or academic task to be completed.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "notes": { "type": "string" },
+        "category": { "type": "string", "enum": ["Academic", "Health", "Chores", "Leisure", "To-Do"] },
+        "dueDate": { "type": "string", "format": "date-time" },
+        "completedAt": { "type": "string", "format": "date-time" },
+        "overdueDays": { "type": "number" },
+        "isAcademic": { "type": "boolean" },
+        "userId": { "type": "string" }
+      },
+      "required": ["name", "category", "dueDate", "userId"]
+    },
+    "Finance": {
+      "title": "Finance",
+      "description": "Weekly budget and spending tracking.",
+      "type": "object",
+      "properties": {
+        "weeklyBudget": { "type": "number" },
+        "currentSpending": { "type": "number" },
+        "userId": { "type": "string" }
+      },
+      "required": ["weeklyBudget", "currentSpending", "userId"]
+    },
+    "Health": {
+      "title": "Health",
+      "description": "Daily health metrics.",
+      "type": "object",
+      "properties": {
+        "date": { "type": "string", "format": "date" },
+        "sleepHours": { "type": "number" },
+        "steps": { "type": "number" },
+        "gymAttended": { "type": "boolean" },
+        "habits": { "type": "object" },
+        "userId": { "type": "string" }
+      },
+      "required": ["date", "userId"]
+    },
+    "Goal": {
+      "title": "Goal",
+      "description": "Long-term personal milestones.",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "deadline": { "type": "string", "format": "date" },
+        "progress": { "type": "number" },
+        "userId": { "type": "string" }
+      },
+      "required": ["title", "userId"]
+    },
+    "Settings": {
+      "title": "Settings",
+      "description": "User preferences and system toggles.",
+      "type": "object",
+      "properties": {
+        "profile": { "type": "object" },
+        "pauseOverride": { "type": "boolean" },
+        "smsEnabled": { "type": "boolean" },
+        "interventionEnabled": { "type": "boolean" },
+        "userId": { "type": "string" }
+      },
+      "required": ["userId"]
+    }
+  },
+  "firestore": {
+    "/tasks/{taskId}": { "schema": "Task", "description": "Collection of tasks." },
+    "/finances/{userId}": { "schema": "Finance", "description": "User's financial data." },
+    "/health/{healthId}": { "schema": "Health", "description": "Daily health logs." },
+    "/goals/{goalId}": { "schema": "Goal", "description": "Long-term goals." },
+    "/settings/{userId}": { "schema": "Settings", "description": "User settings." }
+  }
+}
