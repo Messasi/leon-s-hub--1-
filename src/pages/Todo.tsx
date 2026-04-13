@@ -3,7 +3,7 @@ import { useApp } from '../App';
 import { 
   Plus, Search, Trash2, CheckCircle2, 
   Circle, AlertCircle, Calendar as CalendarIcon,
-  X
+  X, Edit3
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
@@ -17,6 +17,7 @@ export default function Todo() {
   const { user, isLockout } = useApp();
   const [tasks, setTasks] = useState<any[]>([]);
   const [isAdding, setIsAdding] = useState(false);
+  const [editingTask, setEditingTask] = useState<any>(null); // New State for Editing
   const [filter, setFilter] = useState('All');
   const [search, setSearch] = useState('');
 
@@ -34,26 +35,56 @@ export default function Todo() {
     });
   }, [user]);
 
-  const addTask = async (e: React.FormEvent) => {
+  // Handle opening the edit modal
+  const openEditModal = (task: any) => {
+    setEditingTask(task);
+    setNewName(task.name);
+    setNewCategory(task.category);
+    setNewDueDate(task.dueDate);
+    setNewNotes(task.notes || '');
+    setIsAdding(true);
+  };
+
+  // Close modal and reset form
+  const closeModal = () => {
+    setIsAdding(false);
+    setEditingTask(null);
+    setNewName('');
+    setNewCategory('To-Do');
+    setNewDueDate(format(new Date(), "yyyy-MM-dd'T'HH:mm"));
+    setNewNotes('');
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user || !newName) return;
 
     try {
-      await addDoc(collection(db, 'tasks'), {
-        name: newName,
-        category: newCategory,
-        dueDate: newDueDate,
-        notes: newNotes,
-        completedAt: null,
-        userId: user.uid,
-        createdAt: serverTimestamp(),
-        isAcademic: newCategory === 'Academic'
-      });
-      setNewName('');
-      setNewNotes('');
-      setIsAdding(false);
+      if (editingTask) {
+        // Update Existing Task
+        await updateDoc(doc(db, 'tasks', editingTask.id), {
+          name: newName,
+          category: newCategory,
+          dueDate: newDueDate,
+          notes: newNotes,
+          isAcademic: newCategory === 'Academic'
+        });
+      } else {
+        // Create New Task
+        await addDoc(collection(db, 'tasks'), {
+          name: newName,
+          category: newCategory,
+          dueDate: newDueDate,
+          notes: newNotes,
+          completedAt: null,
+          userId: user.uid,
+          createdAt: serverTimestamp(),
+          isAcademic: newCategory === 'Academic'
+        });
+      }
+      closeModal();
     } catch (e) {
-      handleFirestoreError(e, OperationType.CREATE, 'tasks');
+      handleFirestoreError(e, editingTask ? OperationType.UPDATE : OperationType.CREATE, 'tasks');
     }
   };
 
@@ -109,7 +140,7 @@ export default function Todo() {
         </button>
       </header>
 
-      {/* Search & Filter: Open Style */}
+      {/* Search & Filter */}
       <div className="space-y-6">
         <div className="relative group">
           <Search className="absolute left-6 top-1/2 -translate-y-1/2 w-6 h-6 text-[#141414]/20 group-focus-within:text-[#141414] transition-colors" />
@@ -138,7 +169,7 @@ export default function Todo() {
         </div>
       </div>
 
-      {/* Task Grid: Responsive & Open */}
+      {/* Task Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-12">
         <div className="lg:col-span-8 space-y-4">
           <AnimatePresence mode="popLayout">
@@ -195,12 +226,20 @@ export default function Todo() {
                     </div>
                   </div>
 
-                  <button
-                    onClick={() => deleteTask(task.id)}
-                    className="p-3 text-red-500 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-50 rounded-2xl"
-                  >
-                    <Trash2 className="w-6 h-6" />
-                  </button>
+                  <div className="flex flex-col gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button
+                      onClick={() => openEditModal(task)}
+                      className="p-3 text-[#141414]/40 hover:text-[#141414] hover:bg-[#141414]/5 rounded-2xl transition-all"
+                    >
+                      <Edit3 className="w-6 h-6" />
+                    </button>
+                    <button
+                      onClick={() => deleteTask(task.id)}
+                      className="p-3 text-red-500 hover:bg-red-50 rounded-2xl transition-all"
+                    >
+                      <Trash2 className="w-6 h-6" />
+                    </button>
+                  </div>
                 </motion.div>
               );
             })}
@@ -214,7 +253,6 @@ export default function Todo() {
           )}
         </div>
 
-        {/* Sidebar Stats: Open Style */}
         <div className="lg:col-span-4 space-y-8">
           <div className="bg-[#141414] text-white rounded-[3rem] p-10 space-y-10">
             <div>
@@ -233,24 +271,10 @@ export default function Todo() {
               </div>
             </div>
           </div>
-
-          {completedTasks.length > 0 && (
-            <div className="bg-white/40 backdrop-blur-sm rounded-[3rem] p-10 border border-[#141414]/5">
-              <h4 className="text-[10px] font-black uppercase tracking-widest opacity-30 mb-8">Recently Resolved</h4>
-              <div className="space-y-4">
-                {completedTasks.slice(0, 3).map(task => (
-                  <div key={task.id} className="flex items-center gap-4 opacity-40">
-                    <CheckCircle2 className="w-4 h-4 text-green-500 shrink-0" />
-                    <span className="text-sm font-bold truncate line-through">{task.name}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
         </div>
       </div>
 
-      {/* Add Task Modal: Redesigned */}
+      {/* Form Modal (Handles Add and Edit) */}
       <AnimatePresence>
         {isAdding && (
           <div className="fixed inset-0 z-[200] flex items-center justify-center p-6">
@@ -258,7 +282,7 @@ export default function Todo() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              onClick={() => setIsAdding(false)}
+              onClick={closeModal}
               className="absolute inset-0 bg-[#141414]/80 backdrop-blur-md"
             />
             <motion.div
@@ -268,18 +292,22 @@ export default function Todo() {
               className="relative w-full max-w-2xl bg-[#F5F5F0] rounded-[4rem] p-12 shadow-2xl overflow-hidden"
             >
               <div className="absolute top-8 right-8">
-                <button onClick={() => setIsAdding(false)} className="p-4 hover:bg-[#141414]/5 rounded-full transition-colors">
+                <button onClick={closeModal} className="p-4 hover:bg-[#141414]/5 rounded-full transition-colors">
                   <X className="w-6 h-6" />
                 </button>
               </div>
 
               <div className="space-y-12">
                 <div className="space-y-2">
-                  <p className="text-[10px] font-black uppercase tracking-[0.4em] text-[#141414]/30">New Entry</p>
-                  <h2 className="text-6xl font-black tracking-tighter">CREATE TASK</h2>
+                  <p className="text-[10px] font-black uppercase tracking-[0.4em] text-[#141414]/30">
+                    {editingTask ? 'Edit Entry' : 'New Entry'}
+                  </p>
+                  <h2 className="text-6xl font-black tracking-tighter uppercase">
+                    {editingTask ? 'MODIFY TASK' : 'CREATE TASK'}
+                  </h2>
                 </div>
 
-                <form onSubmit={addTask} className="space-y-10">
+                <form onSubmit={handleSubmit} className="space-y-10">
                   <div className="space-y-4">
                     <label className="text-[10px] font-black uppercase tracking-widest opacity-40 block">Task Name</label>
                     <input
@@ -332,7 +360,7 @@ export default function Todo() {
                     type="submit"
                     className="w-full py-6 rounded-full font-black text-xs uppercase tracking-widest bg-[#141414] text-white hover:scale-105 transition-transform shadow-2xl"
                   >
-                    Initialize Task
+                    {editingTask ? 'Confirm Changes' : 'Initialize Task'}
                   </button>
                 </form>
               </div>

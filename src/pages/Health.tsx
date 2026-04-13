@@ -3,7 +3,8 @@ import { useApp } from '../App';
 import { 
   Moon, Footprints, Dumbbell, Droplets, 
   Pill, Sparkles, Scissors, AlertCircle,
-  Activity, TrendingUp, Plus, Check, X, Coffee, Wind, Sun
+  Activity, TrendingUp, Plus, Check, X, Coffee, Wind, Sun,
+  Loader2
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { doc, onSnapshot, setDoc, collection, query, where, limit, orderBy } from 'firebase/firestore';
@@ -49,21 +50,52 @@ export default function Health() {
 
   useEffect(() => {
     if (!user) return;
-    const q = query(collection(db, 'health'), where('userId', '==', user.uid), orderBy('date', 'desc'), limit(7));
-    return onSnapshot(q, (snapshot) => {
+
+    const q = query(
+      collection(db, 'health'), 
+      where('userId', '==', user.uid), 
+      orderBy('date', 'desc'), 
+      limit(7)
+    );
+
+    const unsubscribe = onSnapshot(q, async (snapshot) => {
       const logs = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as HealthLog));
       setHealthLogs([...logs].reverse());
+      
       const today = logs.find(l => l.date === todayStr);
+      
       if (today) {
         setTodayLog(today);
         setSleepInput(today.sleepHours.toString());
+      } else {
+        // Auto-initialize today's log if it doesn't exist
+        const newId = `${user.uid}_${todayStr}`;
+        const newLog: HealthLog = {
+          id: newId,
+          date: todayStr,
+          sleepHours: 0,
+          steps: 0,
+          gymAttended: false,
+          habits: {
+            'vitamins': false,
+            'water': false,
+            'stretch': false
+          },
+          userId: user.uid
+        };
+        try {
+          await setDoc(doc(db, 'health', newId), newLog);
+        } catch (e) {
+          handleFirestoreError(e, OperationType.CREATE, 'health');
+        }
       }
     });
-  }, [user]);
 
-  // FUNCTIONAL: Sync with Real Google Fit API
+    return () => unsubscribe();
+  }, [user, todayStr]);
+
   const syncSteps = async () => {
-    if (!user || !todayLog) return; // Guard against null
+    if (!user || !todayLog) return;
     setIsSyncing(true);
     try {
       const response = await axios.get(`http://localhost:3000/api/health/steps?userId=${user.uid}`);
@@ -72,7 +104,7 @@ export default function Health() {
       }
     } catch (e) {
       console.error("Google Fit Sync Error:", e);
-      // Fallback for development if backend isn't responding
+      // Local fallback for testing
       await updateLog({ steps: 7540 });
     } finally {
       setIsSyncing(false);
@@ -82,9 +114,9 @@ export default function Health() {
   const updateLog = async (updates: Partial<HealthLog>) => {
     if (!user || !todayLog) return;
     try {
-        await setDoc(doc(db, 'health', todayLog.id), { ...todayLog, ...updates });
+      await setDoc(doc(db, 'health', todayLog.id), { ...todayLog, ...updates });
     } catch (e) {
-        handleFirestoreError(e, OperationType.UPDATE, 'health');
+      handleFirestoreError(e, OperationType.UPDATE, 'health');
     }
   };
 
@@ -93,8 +125,13 @@ export default function Health() {
     updateLog({ habits: { ...todayLog.habits, [habitKey]: !todayLog.habits[habitKey] } });
   };
 
-  // Final check to prevent rendering UI with null data
-  if (!todayLog) return null;
+  if (!todayLog) {
+    return (
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <Loader2 className="w-12 h-12 animate-spin text-[#141414]/10" />
+      </div>
+    );
+  }
 
   const stepGoal = settings?.stepGoal || 10000;
   const sleepData = healthLogs.map(l => ({
@@ -181,7 +218,7 @@ export default function Health() {
             </div>
             <div className="flex items-center gap-4">
                <input type="number" value={sleepInput} onChange={e => setSleepInput(e.target.value)} className="w-20 bg-[#141414]/5 rounded-xl p-3 font-black text-center outline-none" />
-               <button onClick={() => updateLog({ sleepHours: parseFloat(sleepInput) })} className="bg-[#141414] text-white px-6 py-3 rounded-xl font-black text-[10px] uppercase transition-all active:scale-95">Update</button>
+               <button onClick={() => updateLog({ sleepHours: parseFloat(sleepInput) || 0 })} className="bg-[#141414] text-white px-6 py-3 rounded-xl font-black text-[10px] uppercase transition-all active:scale-95">Update</button>
             </div>
           </div>
           <div className="h-64 w-full">
@@ -207,26 +244,26 @@ export default function Health() {
              <button onClick={() => setIsAddingProtocol(true)} className="p-2 bg-[#141414] text-white rounded-full hover:scale-110 transition-transform active:scale-90"><Plus size={18} /></button>
            </div>
            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {[
-                { key: 'vitamins', label: 'Vitamins', icon: 'Pill' },
-                { key: 'water', label: 'Hydration', icon: 'Droplets' },
-                { key: 'stretch', label: 'Mobility', icon: 'Activity' },
-                ...(settings?.customProtocols || [])
-              ].map((habit: any) => (
-                <button
-                  key={habit.key}
-                  onClick={() => toggleHabit(habit.key)}
-                  className={`p-6 rounded-[2rem] border-2 transition-all flex items-center justify-between gap-4 ${todayLog.habits[habit.key] ? 'bg-white border-[#141414] shadow-lg scale-[1.02]' : 'bg-white/50 border-transparent hover:bg-white'}`}
-                >
-                  <div className="flex items-center gap-4">
-                    {getIcon(habit.icon, todayLog.habits[habit.key])}
-                    <span className="font-black text-xs uppercase tracking-tight">{habit.label}</span>
-                  </div>
-                  <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center ${todayLog.habits[habit.key] ? 'bg-[#141414] border-[#141414]' : 'border-[#141414]/10'}`}>
-                    {todayLog.habits[habit.key] && <Check size={12} className="text-white" />}
-                  </div>
-                </button>
-              ))}
+             {[
+               { key: 'vitamins', label: 'Vitamins', icon: 'Pill' },
+               { key: 'water', label: 'Hydration', icon: 'Droplets' },
+               { key: 'stretch', label: 'Mobility', icon: 'Activity' },
+               ...(settings?.customProtocols || [])
+             ].map((habit: any) => (
+               <button
+                 key={habit.key}
+                 onClick={() => toggleHabit(habit.key)}
+                 className={`p-6 rounded-[2rem] border-2 transition-all flex items-center justify-between gap-4 ${todayLog.habits[habit.key] ? 'bg-white border-[#141414] shadow-lg scale-[1.02]' : 'bg-white/50 border-transparent hover:bg-white'}`}
+               >
+                 <div className="flex items-center gap-4">
+                   {getIcon(habit.icon, todayLog.habits[habit.key])}
+                   <span className="font-black text-xs uppercase tracking-tight">{habit.label}</span>
+                 </div>
+                 <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center ${todayLog.habits[habit.key] ? 'bg-[#141414] border-[#141414]' : 'border-[#141414]/10'}`}>
+                   {todayLog.habits[habit.key] && <Check size={12} className="text-white" />}
+                 </div>
+               </button>
+             ))}
            </div>
         </div>
       </div>
