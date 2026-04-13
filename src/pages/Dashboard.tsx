@@ -23,14 +23,13 @@ export default function Dashboard() {
   const [selectedDate, setSelectedDate] = useState(startOfToday());
   const [viewDate, setViewDate] = useState(startOfToday());
   const [isAddingEntry, setIsAddingEntry] = useState(false);
+  const [viewingTask, setViewingTask] = useState<any>(null); // State for the Detail Modal
   const [isSendingSms, setIsSendingSms] = useState(false);
-  const [newEntry, setNewEntry] = useState({ name: '', category: 'Schedule', hour: 9 });
+  const [newEntry, setNewEntry] = useState({ name: '', category: 'Schedule', hour: 9, notes: '' });
   const now = new Date();
   
   const weekStart = startOfWeek(viewDate, { weekStartsOn: 1 });
   const weekDays = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
-
-  // Midnight to Midnight Hours
   const dayHours = Array.from({ length: 24 }, (_, i) => i);
 
   useEffect(() => {
@@ -51,7 +50,6 @@ export default function Dashboard() {
     };
   }, [user]);
 
-  // FUNCTIONAL: Toggle Task Completion
   const toggleTask = async (taskId: string, currentStatus: any) => {
     try {
       const taskRef = doc(db, 'tasks', taskId);
@@ -71,17 +69,20 @@ export default function Dashboard() {
     }
 
     setIsSendingSms(true);
-    const budgetRemaining = (finance?.weeklyBudget - finance?.currentSpending).toFixed(2);
-    const message = `HUB UPDATE: ${format(now, 'dd/MM')}\nOverdue: ${overdueCount}\nToday's Tasks: ${selectedDayTasks.length}\nBudget Left: £${budgetRemaining}`.trim();
+    const todayTasksNames = selectedDayTasks.length > 0 ? selectedDayTasks.map(t => `• ${t.name}`).join('\n') : "None";
+    const overdueTasksNames = overdueTasks.length > 0 ? overdueTasks.map(t => `• ${t.name}`).join('\n') : "None";
+    const budgetRemaining = ((settings?.weeklyBudget || 0) - (finance?.currentSpending || 0)).toFixed(2);
+    
+    const message = `*HUB DAILY SUMMARY* 📋\n${format(now, 'EEEE, do MMMM')}\n\n*⚠️ OVERDUE TASKS:*\n${overdueTasksNames}\n\n*📅 DUE TODAY:*\n${todayTasksNames}\n\n*💰 WEEKLY BUDGET:*\nRemaining: £${budgetRemaining} / £${settings?.weeklyBudget || 0}\n\n*🎯 GOALS:*\nCheck your goals tab for active streaks!`.trim();
 
     try {
       await axios.post('http://localhost:3000/api/sms/send', {
         to: settings.profile.phone,
         message: message
       });
-      alert("Status sent to your iPhone!");
+      alert("Full summary sent to WhatsApp!");
     } catch (error) {
-      alert("Failed to send SMS. Ensure server is running on port 3000.");
+      alert("Failed to send. Ensure server is running.");
     } finally {
       setIsSendingSms(false);
     }
@@ -89,21 +90,26 @@ export default function Dashboard() {
 
   const handleAddEntry = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!user) return;
+    if (!user?.uid) return;
+
     try {
-      const dueDate = setMinutes(setHours(selectedDate, newEntry.hour), 0);
+      const taskDate = new Date(selectedDate);
+      taskDate.setHours(newEntry.hour, 0, 0, 0);
+
       await addDoc(collection(db, 'tasks'), {
         name: newEntry.name,
         category: newEntry.category,
-        dueDate: dueDate.toISOString(),
+        notes: newEntry.notes,
+        dueDate: taskDate.toISOString(),
         userId: user.uid,
         createdAt: serverTimestamp(),
         completedAt: null
       });
+
       setIsAddingEntry(false);
-      setNewEntry({ name: '', category: 'Schedule', hour: 9 });
-    } catch (e) {
-      handleFirestoreError(e, OperationType.CREATE, 'tasks');
+      setNewEntry({ name: '', category: 'Schedule', hour: 9, notes: '' });
+    } catch (error: any) {
+      handleFirestoreError(error, OperationType.CREATE, 'tasks');
     }
   };
 
@@ -187,7 +193,7 @@ export default function Dashboard() {
         </div>
 
         <div onClick={() => navigate('/todo')} className="cursor-pointer bg-white/40 backdrop-blur-sm rounded-[3rem] border border-[#141414]/5 p-10 space-y-4 hover:scale-[1.02] transition-transform">
-          <h4 className="text-[10px] font-black uppercase tracking-widest opacity-30">Completed</h4>
+          <h4 className="text-[10px] font-black uppercase tracking-widest opacity-30">Tasks Completed</h4>
           <div className="flex items-end justify-between">
             <p className="text-4xl font-black tracking-tighter">{completedTasks.length}</p>
             <span className="text-[10px] font-black uppercase tracking-widest opacity-30">/ {tasks.length} Tasks</span>
@@ -200,13 +206,8 @@ export default function Dashboard() {
         <div onClick={() => navigate('/health')} className="cursor-pointer bg-white/40 backdrop-blur-sm rounded-[3rem] border border-[#141414]/5 p-10 space-y-4 hover:scale-[1.02] transition-transform">
           <h4 className="text-[10px] font-black uppercase tracking-widest opacity-30">Health Streak</h4>
           <div className="flex items-center gap-4">
-            <div className="w-12 h-12 rounded-2xl bg-green-500 text-white flex items-center justify-center shadow-lg shadow-green-500/20">
-              <Zap className="w-6 h-6" />
-            </div>
-            <div>
-              <p className="text-4xl font-black tracking-tighter text-green-600">12</p>
-              <p className="text-[10px] font-black uppercase tracking-widest opacity-30">Days Active</p>
-            </div>
+            <p className="text-4xl font-black tracking-tighter text-green-600">12</p>
+            <p className="text-[10px] font-black uppercase tracking-widest opacity-30">Days Active</p>
           </div>
         </div>
       </div>
@@ -239,7 +240,6 @@ export default function Dashboard() {
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-12">
-          {/* Scrollable Midnight to Midnight Timeline */}
           <div className="lg:col-span-8 border-r border-[#141414]/5 flex flex-col h-[600px]">
             <div className="p-8 md:p-12 pb-4 flex items-center justify-between">
               <h3 className="text-xl font-black tracking-tight">Schedule for <span className="opacity-30">{format(selectedDate, 'EEEE')}</span></h3>
@@ -251,7 +251,6 @@ export default function Dashboard() {
             <div ref={scrollContainerRef} className="flex-1 overflow-y-auto p-8 md:p-12 pt-0 space-y-2 scrollbar-hide">
               <div className="relative">
                 <div className="absolute left-[2.25rem] top-0 bottom-0 w-px bg-[#141414]/5" />
-                
                 {dayHours.map(hour => {
                    const hourTasks = selectedDayTasks.filter(t => new Date(t.dueDate).getHours() === hour);
                    return (
@@ -263,19 +262,19 @@ export default function Dashboard() {
                            {hourTasks.map(task => (
                              <motion.div 
                                key={task.id} 
-                               onClick={() => toggleTask(task.id, task.completedAt)}
+                               onClick={() => setViewingTask(task)}
                                className="cursor-pointer bg-white border border-[#141414]/5 p-5 rounded-[1.5rem] shadow-sm flex items-center justify-between hover:border-[#141414]/20 transition-all"
                              >
                                 <div>
                                   <span className="text-[10px] font-black uppercase opacity-30">{task.category}</span>
                                   <p className={`font-bold ${task.completedAt ? 'line-through opacity-40' : ''}`}>{task.name}</p>
                                 </div>
-                                {task.completedAt ? <CheckCircle2 className="text-green-500" /> : <div className="w-5 h-5 rounded-full border-2 border-[#141414]/10" />}
+                                <button onClick={(e) => { e.stopPropagation(); toggleTask(task.id, task.completedAt); }}>
+                                  {task.completedAt ? <CheckCircle2 className="text-green-500" /> : <div className="w-5 h-5 rounded-full border-2 border-[#141414]/10" />}
+                                </button>
                              </motion.div>
                            ))}
-                           {hourTasks.length === 0 && (
-                             <div className="h-full border-b border-[#141414]/[0.02]" />
-                           )}
+                           {hourTasks.length === 0 && <div className="h-full border-b border-[#141414]/[0.02]" />}
                         </div>
                      </div>
                    );
@@ -284,24 +283,26 @@ export default function Dashboard() {
             </div>
           </div>
 
-          {/* Sidebar */}
           <div className="lg:col-span-4 p-12 bg-[#141414]/[0.02] space-y-12">
             <div>
-              <h4 className="text-[10px] font-black uppercase tracking-widest opacity-30 mb-6">Daily Text</h4>
+              <h4 className="text-[10px] font-black uppercase tracking-widest opacity-30 mb-6">Daily Summary</h4>
               <div className="bg-[#141414] text-white p-8 rounded-[2rem] space-y-6 relative overflow-hidden">
-                <Smartphone className="absolute -right-4 -top-4 w-24 h-24 opacity-10 rotate-12" />
-                <p className="font-mono text-[10px] opacity-60 leading-relaxed">
-                  DATE: {format(now, 'dd/MM/yyyy')}<br/>
-                  OVERDUE: {overdueCount}<br/>
-                  BUDGET: £{(finance?.weeklyBudget - finance?.currentSpending).toFixed(2)}
-                </p>
+                <div className="font-mono text-[10px] leading-relaxed uppercase">
+                  <p className="border-b border-white/10 pb-2 mb-2">Status: {format(now, 'dd/MM/yyyy')}</p>
+                  <div className="space-y-1">
+                    <p>⚠️ Overdue: {overdueCount}</p>
+                    <p>📅 Today: {selectedDayTasks.length} Tasks</p>
+                    <p>🎯 Goals: 12 Day Streak</p>
+                    <p className="text-green-400">💰 Budget: £{((settings?.weeklyBudget || 0) - (finance?.currentSpending || 0)).toFixed(2)} Left</p>
+                  </div>
+                </div>
                 <button 
                   onClick={handleSendToPhone}
                   disabled={isSendingSms}
-                  className="w-full py-3 bg-white text-[#141414] font-black text-[10px] uppercase tracking-widest rounded-xl hover:bg-green-400 transition-colors flex items-center justify-center gap-2"
+                  className="w-full py-3 bg-white text-[#141414] font-black text-[10px] uppercase tracking-widest rounded-xl hover:bg-gray-200 transition-colors flex items-center justify-center gap-2"
                 >
                   {isSendingSms ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-                  Send to my iPhone
+                  Send to my WhatsApp
                 </button>
               </div>
             </div>
@@ -316,6 +317,39 @@ export default function Dashboard() {
           </div>
         </div>
       </section>
+
+      {/* Task Detail Modal */}
+      <AnimatePresence>
+        {viewingTask && (
+          <div className="fixed inset-0 bg-[#141414]/80 backdrop-blur-md z-50 flex items-center justify-center p-6">
+            <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }} className="bg-white rounded-[3rem] p-10 max-w-md w-full space-y-6 shadow-2xl">
+              <div className="flex justify-between items-start">
+                <div>
+                  <span className="text-[10px] font-black uppercase tracking-widest opacity-30">{viewingTask.category}</span>
+                  <h2 className="text-3xl font-black tracking-tighter uppercase">{viewingTask.name}</h2>
+                </div>
+                <button onClick={() => setViewingTask(null)} className="p-2 hover:bg-[#141414]/5 rounded-full"><X className="w-6 h-6" /></button>
+              </div>
+              <div className="space-y-4">
+                <div className="flex items-center gap-2 opacity-40">
+                  <Clock className="w-4 h-4" />
+                  <span className="text-sm font-bold">{format(new Date(viewingTask.dueDate), 'HH:00')}</span>
+                </div>
+                <div className="p-6 bg-[#141414]/5 rounded-2xl">
+                  <h4 className="text-[10px] font-black uppercase tracking-widest opacity-30 mb-2">Notes</h4>
+                  <p className="text-sm font-medium leading-relaxed">{viewingTask.notes || "No notes attached."}</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => { toggleTask(viewingTask.id, viewingTask.completedAt); setViewingTask(null); }}
+                className={`w-full py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all ${viewingTask.completedAt ? 'bg-red-500 text-white' : 'bg-green-500 text-white'}`}
+              >
+                {viewingTask.completedAt ? 'Mark as Incomplete' : 'Mark as Completed'}
+              </button>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
       {/* Add Entry Modal */}
       <AnimatePresence>
@@ -342,6 +376,10 @@ export default function Dashboard() {
                       <option>Schedule</option><option>Work</option><option>Health</option><option>Personal</option>
                     </select>
                   </div>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black uppercase tracking-widest opacity-40">Notes</label>
+                  <textarea value={newEntry.notes} onChange={e => setNewEntry({...newEntry, notes: e.target.value})} placeholder="Add extra details..." className="w-full bg-[#141414]/5 border-2 border-transparent focus:border-[#141414] rounded-2xl p-4 font-medium outline-none h-24 resize-none" />
                 </div>
                 <button type="submit" className="w-full py-4 bg-[#141414] text-white rounded-2xl font-black text-[10px] uppercase tracking-widest hover:scale-[1.02] transition-all">Add to Schedule</button>
               </form>

@@ -11,6 +11,7 @@ import dotenv from "dotenv";
 import cors from "cors";
 import { initializeApp, cert, getApps } from "firebase-admin/app";
 import { getFirestore } from "firebase-admin/firestore";
+import cron from 'node-cron';
 
 dotenv.config();
 
@@ -47,22 +48,30 @@ async function startServer() {
   app.use(cookieParser());
 
   // --- Twilio Integration ---
-  app.post("/api/sms/send", async (req, res) => {
-    const { to, message } = req.body;
-    const client = twilio(process.env.VITE_TWILIO_ACCOUNT_SID, process.env.VITE_TWILIO_AUTH_TOKEN);
-    try {
-      const response = await client.messages.create({
-        body: message,
-        from: process.env.VITE_TWILIO_PHONE_NUMBER,
-        to: to
-      });
-      res.json({ success: true, sid: response.sid });
-    } catch (error: any) {
-      console.error("Twilio Error:", error);
-      res.status(500).json({ success: false, error: error.message });
-    }
-  });
+  // --- WhatsApp Integration ---
+app.post("/api/sms/send", async (req, res) => {
+  let { to, message } = req.body;
+  const client = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
 
+  // Clean the phone number: If it starts with 0, change to +44
+  if (to.startsWith('0')) {
+    to = '+44' + to.substring(1);
+  }
+
+  try {
+    const response = await client.messages.create({
+      body: message,
+      from: `whatsapp:${process.env.TWILIO_PHONE_NUMBER}`, // +14155238886
+      to: `whatsapp:${to}` // Will become whatsapp:+447464372834
+    });
+    
+    console.log("Success! WhatsApp SID:", response.sid);
+    res.json({ success: true, sid: response.sid });
+  } catch (error: any) {
+    console.error("WhatsApp Error Logged:", error.message);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
   // --- Google Fit OAuth ---
   const googleOAuth2Client = new google.auth.OAuth2(
     process.env.VITE_GOOGLE_CLIENT_ID,
@@ -86,27 +95,65 @@ async function startServer() {
   });
 
   // --- Google Fit Callback ---
-  app.get("/auth/google/callback", async (req, res) => {
-    const { code, state } = req.query; // state is the userId
-    try {
-      const { tokens } = await googleOAuth2Client.getToken(code as string);
-      const userId = state as string;
 
-      // Store in memory for real-time API calls
-      const existing = userTokens.get(userId) || {};
-      userTokens.set(userId, { ...existing, google: tokens });
 
-      // UPDATE FIRESTORE: This turns the X into a tick in Settings
-      await db.collection('settings').doc(userId).update({
-        googleConnected: true
-      });
+// Schedule for 8:00 AM every day
+cron.schedule('0 8 * * *', async () => {
+  const userId = "UvQen8di2DUNHT06Xq7eX3jpWu82"; // Pull this from your Auth
+  const userPhone = "+447464372834";
 
-      res.redirect(`${process.env.VITE_APP_URL}/settings?google_success=true`);
-    } catch (error: any) {
-      console.error("Google Callback Error:", error);
-      res.status(500).send("Google Auth Failed");
-    }
-  });
+  try {
+    const now = new Date();
+    const todayStr = now.toISOString().split('T')[0];
+
+    // 1. Fetch Tasks
+    const tasksSnap = await db.collection('tasks').where('userId', '==', userId).get();
+    const allTasks = tasksSnap.docs.map(d => d.data());
+
+    const todayTasks = allTasks.filter(t => t.dueDate.startsWith(todayStr))
+      .map(t => `• ${t.name}`).join('\n') || "No tasks today";
+
+    const overdueTasks = allTasks.filter(t => !t.completedAt && new Date(t.dueDate) < now)
+      .map(t => `• ${t.name}`).join('\n') || "None";
+
+    // 2. Fetch Finance
+    const financeDoc = await db.collection('finances').doc(userId).get();
+    const finance = financeDoc.data();
+    const budgetLeft = ((finance?.weeklyBudget || 0) - (finance?.currentSpending || 0)).toFixed(2);
+
+    // 3. Build Message
+    const summary = `
+*DAILY HUB SUMMARY* 📋
+_Good Morning Leon_
+
+*⚠️ OVERDUE:*
+${overdueTasks}
+
+*📅 TODAY'S PLAN:*
+${todayTasks}
+
+*💰 BUDGET REMAINING:*
+£${budgetLeft}
+
+*🎯 GOALS:*
+Keep your 12-day streak alive!
+`.trim();
+
+    // 4. Send via Twilio
+    const client = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
+    await client.messages.create({
+      body: summary,
+      from: `whatsapp:${process.env.TWILIO_PHONE_NUMBER}`,
+      to: `whatsapp:${userPhone}`
+    });
+
+    console.log("8am Automated Summary Sent");
+  } catch (err) {
+    console.error("Cron Job Error:", err);
+  }
+}, {
+  timezone: "Europe/London" // Ensures it hits 8 am UK time
+});
 
   // --- TrueLayer OAuth (SANDBOX) ---
   app.get("/auth/truelayer", (req, res) => {
