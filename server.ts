@@ -40,9 +40,19 @@ const userTokens = new Map<string, any>();
 
 async function startServer() {
   const app = express();
-  const PORT = 3000;
+const PORT = process.env.PORT || 3000;
 
-  app.use(cors({origin: process.env.CORS_ORIGIN || 'http://localhost:5173', credentials: true}));
+app.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
+});
+
+app.use(cors({
+  origin: [
+    "http://localhost:5173",
+    "leon-s-hub-1-5dnymgsn3-leons-projects-242dfba0.vercel.app"
+  ],
+  credentials: true
+}));
   app.use(express.json());
   app.use(cookieParser());
 
@@ -322,9 +332,10 @@ Keep your 12-day streak alive!
   // --- Remaining code unchanged ---
   // (health + banking sync + vite setup)
 
-  app.listen(PORT, "0.0.0.0", () => {
-    console.log(`Server running on http://localhost:${PORT}`);
-  });
+ app.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
+});
+
 }
 
 startServer();
