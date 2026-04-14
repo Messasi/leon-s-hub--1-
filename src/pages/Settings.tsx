@@ -28,13 +28,25 @@ export default function Settings() {
         }
     }, [settings]);
 
-    const handleConnectGoogle = () => {
-        window.location.href = `http://localhost:3000/auth/google?userId=${user?.uid}`;
-    };
+   const handleConnectGoogle = () => {
+  if (!user || !user.uid) {
+    alert("User not ready yet. Please wait or refresh.");
+    return;
+  }
 
-    const handleConnectBanking = () => {
-        window.location.href = `http://localhost:3000/auth/truelayer?userId=${user?.uid}`;
-    };
+  window.location.href =
+    `https://leon-s-hub-1-production.up.railway.app/auth/google?userId=${encodeURIComponent(user.uid)}`;
+};
+
+const handleConnectBanking = () => {
+  if (!user || !user.uid) {
+    alert("User not ready yet. Please wait or refresh.");
+    return;
+  }
+
+  window.location.href =
+    `https://leon-s-hub-1-production.up.railway.app/auth/truelayer?userId=${encodeURIComponent(user.uid)}`;
+};
 
     const saveSettings = async (updates: any) => {
         if (!user) return;

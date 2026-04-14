@@ -21,6 +21,8 @@ interface HealthLog {
   gymAttended: boolean;
   habits: Record<string, boolean>;
   userId: string;
+  stepStreak: number;
+lastGoalHitDate: string;
 }
 
 const getIcon = (iconName: string, isCompleted: boolean) => {
@@ -76,6 +78,8 @@ export default function Health() {
           sleepHours: 0,
           steps: 0,
           gymAttended: false,
+          stepStreak: 0,
+          lastGoalHitDate: '',
           habits: {
             'vitamins': false,
             'water': false,
@@ -94,22 +98,51 @@ export default function Health() {
     return () => unsubscribe();
   }, [user, todayStr]);
 
-  const syncSteps = async () => {
-    if (!user || !todayLog) return;
-    setIsSyncing(true);
-    try {
-      const response = await axios.get(`http://localhost:3000/api/health/steps?userId=${user.uid}`);
-      if (response.data.success) {
-        await updateLog({ steps: response.data.steps });
-      }
-    } catch (e) {
-      console.error("Google Fit Sync Error:", e);
-      // Local fallback for testing
-      await updateLog({ steps: 7540 });
-    } finally {
-      setIsSyncing(false);
+  useEffect(() => {
+  if (!user || !todayLog) return;
+
+  // sync immediately when page loads
+  syncSteps(true);
+
+  // then sync every 10 minutes
+  const interval = setInterval(() => {
+    syncSteps(true);
+  }, 10 * 60 * 1000);
+
+  return () => clearInterval(interval);
+}, [user, todayLog]);
+
+ const syncSteps = async (silent = false) => {
+  if (!user || !todayLog) return;
+
+  if (!silent) setIsSyncing(true);
+
+  try {
+    const response = await axios.get(
+      `https://leon-s-hub-1-production.up.railway.app/api/health/steps?userId=${encodeURIComponent(user.uid)}`
+    );
+
+    if (!response.data?.success) {
+      throw new Error("Invalid response");
     }
-  };
+
+    const steps = Number(response.data.steps);
+
+    if (isNaN(steps) || steps < 0) {
+      throw new Error("Invalid steps value");
+    }
+
+    // always overwrite for daily tracking
+    await updateLog({ steps });
+
+await updateStepStreak(steps);
+
+  } catch (e) {
+    console.error("Step sync failed:", e);
+  } finally {
+    if (!silent) setIsSyncing(false);
+  }
+};
 
   const updateLog = async (updates: Partial<HealthLog>) => {
     if (!user || !todayLog) return;
@@ -139,6 +172,45 @@ export default function Health() {
     hours: l.sleepHours
   }));
 
+  const updateStepStreak = async (steps: number) => {
+  const goal = settings?.stepGoal || 10000;
+  const today = todayStr;
+
+  const yesterday = format(subDays(new Date(), 1), 'yyyy-MM-dd');
+
+  const currentStreak = todayLog.stepStreak || 0;
+  const lastHitDate = todayLog.lastGoalHitDate || '';
+
+  let newStreak = currentStreak;
+
+  // If goal met today
+  if (steps >= goal) {
+
+    // Case 1: first time ever
+    if (!lastHitDate) {
+      newStreak = 1;
+    }
+
+    // Case 2: continued streak
+    else if (lastHitDate === yesterday) {
+      newStreak = currentStreak + 1;
+    }
+
+    // Case 3: gap → restart
+    else {
+      newStreak = 1;
+    }
+
+    await updateLog({
+      stepStreak: newStreak,
+      lastGoalHitDate: today
+    });
+
+  } else {
+    // If goal NOT met today → do nothing (streak stays same)
+  }
+};
+
   return (
     <div className="max-w-6xl mx-auto space-y-12 pb-20">
       <header className="flex flex-col md:flex-row md:items-end justify-between gap-8 pt-4">
@@ -156,7 +228,7 @@ export default function Health() {
           <div className="flex items-center justify-between">
             <h3 className="text-xl font-black tracking-tight flex items-center gap-3"><Footprints /> Steps</h3>
             <button 
-              onClick={syncSteps} 
+              onClick={() => syncSteps()}
               disabled={isSyncing} 
               className="px-4 py-2 bg-[#141414] text-white rounded-full text-[10px] font-black uppercase tracking-widest flex items-center gap-2 transition-all active:scale-95"
             >

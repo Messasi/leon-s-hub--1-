@@ -48,33 +48,53 @@ export default function Finances() {
 
   // REAL API SYNC: Fetch live bank data
   const syncBankData = async () => {
-    if (!user || !finance) return;
-    setIsSyncing(true);
-    try {
-      const response = await axios.get(`http://localhost:3000/api/banking/sync?userId=${user.uid}`);
+  if (!user || !finance) return;
 
-      if (response.data.success && response.data.transactions) {
-        // Calculate the total spent from real transactions
-        const realSpendingTotal = response.data.transactions.reduce((sum: number, tx: any) => sum + tx.amount, 0);
+  setIsSyncing(true);
 
-        // Update Firestore with real data
-        await updateDoc(doc(db, 'finances', user.uid), {
-          currentSpending: realSpendingTotal,
-          transactions: response.data.transactions // Replace or merge depending on preference
-        });
+  try {
+    const response = await axios.get(
+      `https://leon-s-hub-1-production.up.railway.app/api/banking/sync?userId=${encodeURIComponent(user.uid)}`
+    );
 
-        alert("Bank data synced successfully!");
-      }
-    } catch (error) {
-      console.error("Banking sync failed:", error);
-      alert("Failed to sync real data. Ensure bank is connected in Settings.");
-    } finally {
-      setIsSyncing(false);
+    const transactions = response?.data?.transactions || [];
+
+    if (!Array.isArray(transactions)) {
+      throw new Error("Invalid transaction data");
     }
-  };
+
+    // Only count spending (money out)
+    const realSpendingTotal = transactions
+      .filter((tx: any) => tx.amount < 0)
+      .reduce((sum: number, tx: any) => sum + Math.abs(tx.amount), 0);
+
+    // Prevent duplicates
+    const existingTransactions = finance.transactions || [];
+    const existingIds = new Set(existingTransactions.map((t: any) => t.id));
+
+    const newTransactions = transactions.filter(
+      (t: any) => !existingIds.has(t.id)
+    );
+
+    const mergedTransactions = [...existingTransactions, ...newTransactions];
+
+    await updateDoc(doc(db, 'finances', user.uid), {
+      currentSpending: realSpendingTotal,
+      transactions: mergedTransactions
+    });
+
+    alert("Bank data synced successfully!");
+
+  } catch (error) {
+    console.error("Banking sync failed:", error);
+    alert("Failed to sync real data. Ensure bank is connected.");
+  } finally {
+    setIsSyncing(false);
+  }
+};
 
   const handleConnectTrueLayer = () => {
-    window.location.href = `http://localhost:3000/auth/truelayer?userId=${user?.uid}`;
+    window.location.href = `https://leon-s-hub-1-production.up.railway.app/auth/truelayer?userId=${user?.uid}`;
   };
 
   const handleExpenseSubmit = async (e: React.FormEvent) => {

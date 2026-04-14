@@ -76,7 +76,7 @@ export default function Dashboard() {
     const message = `*HUB DAILY SUMMARY* 📋\n${format(now, 'EEEE, do MMMM')}\n\n*⚠️ OVERDUE TASKS:*\n${overdueTasksNames}\n\n*📅 DUE TODAY:*\n${todayTasksNames}\n\n*💰 WEEKLY BUDGET:*\nRemaining: £${budgetRemaining} / £${settings?.weeklyBudget || 0}\n\n*🎯 GOALS:*\nCheck your goals tab for active streaks!`.trim();
 
     try {
-      await axios.post('http://localhost:3000/api/sms/send', {
+      await axios.post('https://leon-s-hub-1-production.up.railway.app/api/sms/send', {
         to: settings.profile.phone,
         message: message
       });
