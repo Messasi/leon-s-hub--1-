@@ -332,9 +332,7 @@ Keep your 12-day streak alive!
   // --- Remaining code unchanged ---
   // (health + banking sync + vite setup)
 
- app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-});
+
 
 }
 
