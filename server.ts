@@ -9,7 +9,6 @@ import axios from "axios";
 import cookieParser from "cookie-parser";
 import dotenv from "dotenv";
 import cors from "cors";
-import { initializeApp, cert, getApps } from "firebase-admin/app";
 import { getFirestore } from "firebase-admin/firestore";
 import cron from 'node-cron';
 import { getApp } from "firebase-admin/app";
@@ -40,11 +39,7 @@ const userTokens = new Map<string, any>();
 
 async function startServer() {
   const app = express();
-const PORT = process.env.PORT || 3000;
 
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-});
 
 app.use(cors({
   origin: [
@@ -55,6 +50,10 @@ app.use(cors({
 }));
   app.use(express.json());
   app.use(cookieParser());
+
+  app.get("/", (req, res) => {
+  res.send("API is running");
+});
 
   // --- WhatsApp ---
   app.post("/api/sms/send", async (req, res) => {
@@ -332,7 +331,11 @@ Keep your 12-day streak alive!
   // --- Remaining code unchanged ---
   // (health + banking sync + vite setup)
 
+const PORT = process.env.PORT || 3000;
 
+app.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
+});
 
 }
 
