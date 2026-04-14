@@ -4,10 +4,9 @@
  */
 
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import { onAuthStateChanged, signInWithPopup, GoogleAuthProvider, User } from 'firebase/auth';
 import { useState, useEffect, createContext, useContext } from 'react';
-import { auth, db, OperationType, handleFirestoreError } from './firebase';
-import { doc, getDoc, setDoc, onSnapshot, collection, query, where } from 'firebase/firestore';
+import { db, OperationType, handleFirestoreError } from './firebase';
+import { doc, setDoc, onSnapshot, collection, query, where } from 'firebase/firestore';
 import Layout from './components/Layout';
 import Dashboard from './pages/Dashboard';
 import Todo from './pages/Todo';
@@ -17,8 +16,11 @@ import Goals from './pages/Goals';
 import Settings from './pages/Settings';
 import { Loader2 } from 'lucide-react';
 
+// Using the UID from your environment variables
+const ADMIN_UID = (import.meta as any).env.VITE_USER_ID;
+
 interface AppContextType {
-  user: User | null;
+  user: { uid: string; displayName: string } | null;
   loading: boolean;
   isLockout: boolean;
   settings: any;
@@ -34,44 +36,44 @@ export const useApp = () => {
 };
 
 export default function App() {
-  const [user, setUser] = useState<User | null>(null);
+  const [user] = useState({ uid: ADMIN_UID, displayName: 'Leon' });
   const [loading, setLoading] = useState(true);
   const [isLockout, setIsLockout] = useState(false);
   const [settings, setSettings] = useState<any>(null);
   const [overdueCount, setOverdueCount] = useState(0);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      setUser(user);
-      setLoading(false);
-    });
-    return unsubscribe;
-  }, []);
-
-  useEffect(() => {
-    if (!user) return;
+    if (!ADMIN_UID) {
+      console.error("VITE_USER_ID is missing from environment variables.");
+      return;
+    }
 
     // Listen to settings
-    const settingsRef = doc(db, 'settings', user.uid);
+    const settingsRef = doc(db, 'settings', ADMIN_UID);
     const unsubSettings = onSnapshot(settingsRef, (doc) => {
       if (doc.exists()) {
         setSettings(doc.data());
+        setLoading(false);
       } else {
-        // Initialize settings
         const initialSettings = {
-          userId: user.uid,
+          userId: ADMIN_UID,
           pauseOverride: false,
           smsEnabled: true,
           interventionEnabled: true,
-          profile: { name: user.displayName, email: user.email, phone: '07464372834' }
+          profile: { name: 'Leon', email: '', phone: '07464372834' }
         };
-        setDoc(settingsRef, initialSettings).catch(e => handleFirestoreError(e, OperationType.WRITE, 'settings'));
+        setDoc(settingsRef, initialSettings)
+          .then(() => setLoading(false))
+          .catch(e => handleFirestoreError(e, OperationType.WRITE, 'settings'));
       }
+    }, (error) => {
+      console.error("Firestore settings error:", error);
+      setLoading(false);
     });
 
-    // Listen to overdue tasks for lockout
+    // Listen to overdue tasks
     const tasksRef = collection(db, 'tasks');
-    const q = query(tasksRef, where('userId', '==', user.uid), where('completedAt', '==', null));
+    const q = query(tasksRef, where('userId', '==', ADMIN_UID), where('completedAt', '==', null));
     const unsubTasks = onSnapshot(q, (snapshot) => {
       const tasks = snapshot.docs.map(d => d.data());
       const now = new Date();
@@ -86,27 +88,13 @@ export default function App() {
       unsubSettings();
       unsubTasks();
     };
-  }, [user]);
+  }, []);
 
   if (loading) {
     return (
-      <div className="h-screen w-screen flex items-center justify-center bg-[#F5F5F0]">
-        <Loader2 className="w-8 h-8 animate-spin text-[#141414]" />
-      </div>
-    );
-  }
-
-  if (!user) {
-    return (
-      <div className="h-screen w-screen flex flex-col items-center justify-center bg-[#F5F5F0] p-6 text-center">
-        <h1 className="text-6xl font-black tracking-tighter mb-4 text-[#141414]">MyHub</h1>
-        <p className="text-xl text-[#141414]/60 mb-8 max-w-md">Zero-tolerance life management. Data-driven discipline.</p>
-        <button
-          onClick={() => signInWithPopup(auth, new GoogleAuthProvider())}
-          className="px-8 py-4 bg-[#141414] text-white font-bold rounded-full hover:scale-105 transition-transform"
-        >
-          Welcome back Leon
-        </button>
+      <div className="h-screen w-screen flex flex-col items-center justify-center bg-[#F5F5F0]">
+        <Loader2 className="w-8 h-8 animate-spin text-[#141414] mb-4" />
+        <p className="text-[#141414]/60 font-medium tracking-tight">Loading your Hub...</p>
       </div>
     );
   }
