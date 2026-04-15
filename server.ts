@@ -60,9 +60,13 @@ app.use(cors({
     let { to, message } = req.body;
     const client = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
 
-    if (to.startsWith('0')) {
-      to = '+44' + to.substring(1);
-    }
+    if (!to.startsWith('+')) {
+  if (to.startsWith('0')) {
+    to = '+44' + to.substring(1);
+  } else {
+    return res.status(400).json({ success: false, error: "Invalid phone number format" });
+  }
+}
 
     try {
       const response = await client.messages.create({
@@ -87,7 +91,7 @@ app.use(cors({
   );
 
  app.get("/auth/google", (req, res) => {
-  const userId = req.query.userId as string;
+  const userId = (req.query.userId as string) || process.env.VITE_USER_ID;
 
   if (!userId) {
     return res.status(400).send("Missing userId");
@@ -146,7 +150,7 @@ app.get("/auth/google/callback", async (req, res) => {
 });
 
 app.get("/api/health/steps", async (req, res) => {
-  const userId = req.query.userId as string;
+  const userId = (req.query.userId as string) || process.env.VITE_USER_ID;
 
   if (!userId) {
     return res.status(400).json({ success: false, message: "Missing userId" });
@@ -165,6 +169,21 @@ app.get("/api/health/steps", async (req, res) => {
     }
 
     googleOAuth2Client.setCredentials(tokenData);
+
+    if (tokenData.refresh_token) {
+  const refreshed = await googleOAuth2Client.refreshAccessToken();
+  const newTokens = refreshed.credentials;
+
+  await db.collection("user_tokens").doc(userId).set({
+    google: {
+      access_token: newTokens.access_token,
+      refresh_token: newTokens.refresh_token || tokenData.refresh_token,
+      expiry_date: newTokens.expiry_date
+    }
+  }, { merge: true });
+
+  googleOAuth2Client.setCredentials(newTokens);
+}
 
     // 2. Define time range (today)
     const startOfDay = new Date();
@@ -312,10 +331,10 @@ Keep your 12-day streak alive!
 
     const userId = state as string;
 
-    await db.collection("tokens").doc(userId).set({
-      truelayer: response.data,
-      updatedAt: new Date()
-    });
+   await db.collection("user_tokens").doc(userId).set({
+  truelayer: response.data,
+  updatedAt: new Date()
+}, { merge: true });
 
     await db.collection("settings").doc(userId).set({
       bankingConnected: true
