@@ -35,7 +35,7 @@ export default function Settings() {
   }
 
   window.location.href =
-    `https://leon-s-hub-1-production.up.railway.app/auth/google?userId=${encodeURIComponent(user.uid)}`;
+  "https://leon-s-hub-1-production.up.railway.app/auth/google?userId=UvQen8di2DUNHT06Xq7eX3jpWu82";
 };
 
 const handleConnectBanking = () => {
@@ -45,7 +45,7 @@ const handleConnectBanking = () => {
   }
 
   window.location.href =
-    `https://leon-s-hub-1-production.up.railway.app/auth/truelayer?userId=${encodeURIComponent(user.uid)}`;
+   "https://leon-s-hub-1-production.up.railway.app/auth/truelayer?userId=UvQen8di2DUNHT06Xq7eX3jpWu82";
 };
 
     const saveSettings = async (updates: any) => {
