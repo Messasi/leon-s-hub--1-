@@ -83,7 +83,7 @@ app.use(cors({
   const googleOAuth2Client = new google.auth.OAuth2(
     process.env.GOOGLE_CLIENT_ID,
     process.env.GOOGLE_CLIENT_SECRET,
-    `https://leon-s-hub-1-production.up.railway.app/auth/google/callback`
+    process.env.GOOGLE_REDIRECT_URI
   );
 
  app.get("/auth/google", (req, res) => {
