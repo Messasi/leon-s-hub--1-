@@ -42,11 +42,20 @@ async function startServer() {
 
 
 app.use(cors({
-  origin: [
-    "http://localhost:5173",
-    "https://leon-s-hub-1-5dnymgsn3-leons-projects-242dfba0.vercel.app"
-  ],
-  credentials: true
+  origin: (origin, cb) => {
+    // Allow requests with no origin (like server-to-server or mobile apps)
+    if (!origin) return cb(null, true);
+
+    if (
+      origin === "http://localhost:5173" ||
+      origin.endsWith("-leons-projects-242dfba0.vercel.app")
+    ) {
+      return cb(null, true);
+    }
+
+    return cb(new Error("Not allowed by CORS"));
+  },
+  credentials: true 
 }));
   app.use(express.json());
   app.use(cookieParser());

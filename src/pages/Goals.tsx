@@ -422,11 +422,11 @@ export default function Goals() {
                   </div>
                 </div>
 
-                <button 
+               <button 
                   type="submit"
                   className="w-full py-6 bg-[#141414] text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:scale-[1.02] transition-all shadow-xl"
-                >
-                  Initiate Trajectory
+                 >
+                  Create Goal
                 </button>
               </form>
             </motion.div>
