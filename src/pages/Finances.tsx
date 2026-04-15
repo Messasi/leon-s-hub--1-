@@ -94,8 +94,10 @@ export default function Finances() {
 };
 
   const handleConnectTrueLayer = () => {
-    window.location.href = "https://leon-s-hub-1-production.up.railway.app/auth/truelayer?userId=UvQen8di2DUNHT06Xq7eX3jpWu82";
-  };
+  const API_URL = import.meta.env.VITE_API_URL;
+
+  window.location.href = `${API_URL}/auth/truelayer?userId=UvQen8di2DUNHT06Xq7eX3jpWu82`;
+};
 
   const handleExpenseSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

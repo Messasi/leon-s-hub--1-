@@ -14,6 +14,9 @@ import cron from 'node-cron';
 import { getApp } from "firebase-admin/app";
 import admin from 'firebase-admin';
 
+
+const APP_URL = import.meta.env.VITE_APP_URL;
+
 dotenv.config();
 
 const __filename = fileURLToPath(import.meta.url);
@@ -148,9 +151,9 @@ app.get("/auth/google/callback", async (req, res) => {
       googleConnected: true
     }, { merge: true });
 
-    const redirectUrl = process.env.APP_URL || "http://localhost:5173";
+   
 
-    res.redirect(`${redirectUrl}/settings?google_success=true`);
+   res.redirect(`${APP_URL}/settings?google_success=true`);
 
   } catch (error) {
     console.error("Google Callback Error:", error);
@@ -349,7 +352,7 @@ Keep your 12-day streak alive!
       bankingConnected: true
     }, { merge: true });
 
-    res.redirect(`${process.env.VITE_APP_URL}/finances?banking_success=true`);
+   res.redirect(`${process.env.VITE_APP_URL}/finances?banking_success=true`);
   } catch (error) {
     console.error("TrueLayer Callback Error:", error);
     res.status(500).send("TrueLayer Auth Failed");

@@ -34,8 +34,10 @@ export default function Settings() {
     return;
   }
 
+  const API_URL = import.meta.env.VITE_API_URL;
+
   window.location.href =
-  "https://leon-s-hub-1-production.up.railway.app/auth/google?userId=UvQen8di2DUNHT06Xq7eX3jpWu82";
+    `${API_URL}/auth/google?userId=${user.uid}`;
 };
 
 const handleConnectBanking = () => {
@@ -44,8 +46,10 @@ const handleConnectBanking = () => {
     return;
   }
 
+  const API_URL = import.meta.env.VITE_API_URL;
+
   window.location.href =
-   "https://leon-s-hub-1-production.up.railway.app/auth/truelayer?userId=UvQen8di2DUNHT06Xq7eX3jpWu82";
+    `${API_URL}/auth/truelayer?userId=${user.uid}`;
 };
 
     const saveSettings = async (updates: any) => {
