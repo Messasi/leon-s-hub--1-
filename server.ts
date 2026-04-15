@@ -44,7 +44,7 @@ async function startServer() {
 app.use(cors({
   origin: [
     "http://localhost:5173",
-    "leon-s-hub-1-5dnymgsn3-leons-projects-242dfba0.vercel.app"
+    "https://leon-s-hub-1-5dnymgsn3-leons-projects-242dfba0.vercel.app"
   ],
   credentials: true
 }));
@@ -135,7 +135,7 @@ app.get("/auth/google/callback", async (req, res) => {
       googleConnected: true
     }, { merge: true });
 
-    const redirectUrl = process.env.VITE_APP_URL || "http://localhost:5173";
+    const redirectUrl = process.env.APP_URL || "http://localhost:5173";
 
     res.redirect(`${redirectUrl}/settings?google_success=true`);
 
